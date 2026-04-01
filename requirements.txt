@@ -1,41 +1,11 @@
-# ============================================================
-# Backtest Framework - Requirements
-# ============================================================
-# Instalación:
-#   python -m venv .venv
-#   source .venv/bin/activate   (Mac/Linux)
-#   call .venv\Scripts\activate  (Windows)
-#   pip install -r requirements.txt
-# ============================================================
+# python3 -m venv .venv
+# pip install -r requirements.txt
+# call .venv\Scripts\activate
 
-# --- Datos financieros ---
-yfinance>=0.2.36
 
-# --- Análisis de datos ---
-pandas>=2.0.0
-numpy>=1.26.0
-scipy>=1.11.0
-
-# --- Visualización interactiva ---
-plotly>=5.18.0
-kaleido>=0.2.1        # Para exportar figuras como PNG/PDF (opcional)
-
-# --- Excel / reporte ---
-openpyxl>=3.1.0
-
-# --- Caché / almacenamiento ---
-pyarrow>=14.0.0       # Para formato parquet (cache de datos)
-fastparquet>=2023.10.1
-
-# --- Utilidades ---
-tqdm>=4.66.0          # Barras de progreso
-
-# --- Streamlit (dashboard interactivo, opcional) ---
-streamlit>=1.30.0
-
-# --- Otros (del proyecto original) ---
-sodapy
-matplotlib>=3.8.0
-seaborn>=0.13.0
-nbformat>=5.9.0
-lseg.data
+streamlit
+pandas
+openpyxl
+plotly
+lseg.data 
+yfinance
