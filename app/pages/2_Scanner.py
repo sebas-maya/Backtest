@@ -22,7 +22,7 @@ import numpy as np
 from app.utils import (
     init_state, backtest_config_sidebar,
     get_long_df, get_ticker_list,
-    METRIC_OPTIONS, page_header,
+    METRIC_OPTIONS, METRIC_TO_COLUMN_MAP, page_header,
     show_metrics_grid,
 )
 from data_loader import get_available_tickers
@@ -158,7 +158,9 @@ bh_ret = scanner._bh_return
 k2.metric("Buy & Hold (período)", f"{bh_ret:.2f}%")
 best_row = summary_df.iloc[0]
 k3.metric("Mejor estrategia", best_row["strategy"][:22])
-k4.metric(f"Mejor {sort_metric_label}", f"{best_row.get(sort_metric, 0):.3f}")
+# Mapear nombre de métrica a columna del DataFrame
+column_name = METRIC_TO_COLUMN_MAP.get(sort_metric, sort_metric)
+k4.metric(f"Mejor {sort_metric_label}", f"{best_row.get(column_name, 0):.3f}")
 alpha_positive = (summary_df["alpha_vs_bh_%"] > 0).sum() if "alpha_vs_bh_%" in summary_df.columns else 0
 k5.metric("Con alpha positivo vs B&H", alpha_positive)
 
@@ -241,9 +243,12 @@ st.divider()
 # ── Mejor por categoría ───────────────────────────────────────────────────────
 st.markdown("#### Mejor estrategia por categoría")
 if "category" in summary_df.columns:
+    # Mapear nombre de métrica a columna del DataFrame
+    column_name = METRIC_TO_COLUMN_MAP.get(sort_metric, sort_metric)
+    
     best_by_cat = (
         summary_df.groupby("category")
-        .apply(lambda x: x.nlargest(1, sort_metric))
+        .apply(lambda x: x.nlargest(1, column_name))
         .reset_index(drop=True)
     )[["category", "strategy", "total_return_%", "sharpe_ratio",
        "sortino_ratio", "max_dd_%", "win_rate_%", "n_trades"]]

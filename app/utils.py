@@ -99,6 +99,23 @@ METRIC_OPTIONS = {
     "Profit Factor": "profit_factor",
 }
 
+# Mapeo de nombres de métricas (METRIC_OPTIONS) a columnas de scanner DataFrame
+# Necesario porque el scanner usa sufijo "_%"  mientras que METRIC_OPTIONS usa "_pct"
+METRIC_TO_COLUMN_MAP = {
+    "sharpe_ratio": "sharpe_ratio",
+    "sortino_ratio": "sortino_ratio",
+    "calmar_ratio": "calmar_ratio",
+    "omega_ratio": "omega_ratio",
+    "total_return_pct": "total_return_%",
+    "cagr_pct": "cagr_%",
+    "profit_factor": "profit_factor",
+    "max_drawdown_pct": "max_dd_%",
+    "annual_volatility_pct": "annual_vol_%",
+    "win_rate_pct": "win_rate_%",
+    "expectancy_pct": "expectancy_%",
+    "recovery_factor": "recovery_factor",
+}
+
 # ── Session State helpers ─────────────────────────────────────────────────────
 
 def init_state() -> None:
