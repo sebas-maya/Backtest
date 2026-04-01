@@ -138,144 +138,144 @@ else:
                                       list(METRIC_OPTIONS.keys()),
                                       key="opt_metric_sel")
         opt_metric = METRIC_OPTIONS[metric_label]
-
-# ── Grid de parámetros personalizable ────────────────────────────────────────
-st.markdown("#### Espacio de parámetros")
-st.caption("Ingresa los valores como lista separada por comas. El motor evaluará todas las combinaciones.")
-
-# Parámetros específicos por tipo de estrategia
-if strat_type == "sma_crossover":
-    col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-    with col_p1:
-        fast_vals = st.text_input("fast (períodos MA rápida)", "10, 20, 30, 50", key="p_fast")
-    with col_p2:
-        slow_vals = st.text_input("slow (períodos MA lenta)", "50, 100, 150, 200", key="p_slow")
-    with col_p3:
-        sl_vals = st.text_input("stop_loss", "0.04, 0.06, 0.08", key="p_sl")
-    with col_p4:
-        tp_vals = st.text_input("take_profit", "0.10, 0.15, 0.20, 0.25", key="p_tp")
-
-    def parse_list(s):
-        return [float(x.strip()) for x in s.split(",") if x.strip()]
-
-    def parse_int_list(s):
-        return [int(float(x.strip())) for x in s.split(",") if x.strip()]
-
-    param_space = {
-        "fast": parse_int_list(fast_vals),
-        "slow": parse_int_list(slow_vals),
-        "stop_loss": parse_list(sl_vals),
-        "take_profit": parse_list(tp_vals),
-    }
-    factory = make_sma_crossover_strategy
-
-elif strat_type == "ema_crossover":
-    col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-    with col_p1:
-        fast_vals = st.text_input("fast", "5, 9, 12, 21", key="p_fast_ema")
-    with col_p2:
-        slow_vals = st.text_input("slow", "21, 34, 50, 89", key="p_slow_ema")
-    with col_p3:
-        sl_vals = st.text_input("stop_loss", "0.03, 0.05, 0.07", key="p_sl_ema")
-    with col_p4:
-        tp_vals = st.text_input("take_profit", "0.10, 0.15, 0.20", key="p_tp_ema")
-
-    def parse_list(s):
-        return [float(x.strip()) for x in s.split(",") if x.strip()]
-    def parse_int_list(s):
-        return [int(float(x.strip())) for x in s.split(",") if x.strip()]
-
-    param_space = {
-        "fast": parse_int_list(fast_vals),
-        "slow": parse_int_list(slow_vals),
-        "stop_loss": parse_list(sl_vals),
-        "take_profit": parse_list(tp_vals),
-    }
-    factory = make_ema_crossover_strategy
-
-elif strat_type == "rsi":
-    col_p1, col_p2, col_p3, col_p4, col_p5, col_p6 = st.columns(6)
-    with col_p1:
-        period_vals = st.text_input("period", "9, 14, 21", key="p_period_rsi")
-    with col_p2:
-        os_vals = st.text_input("oversold", "20, 25, 30", key="p_os_rsi")
-    with col_p3:
-        ob_vals = st.text_input("overbought", "65, 70, 75, 80", key="p_ob_rsi")
-    with col_p4:
-        sl_vals = st.text_input("stop_loss", "0.03, 0.05", key="p_sl_rsi")
-    with col_p5:
-        tp_vals = st.text_input("take_profit", "0.08, 0.12, 0.15", key="p_tp_rsi")
-    with col_p6:
-        hold_vals = st.text_input("max_holding_days", "15, 20, 30", key="p_hold_rsi")
-
-    def parse_list(s):
-        return [float(x.strip()) for x in s.split(",") if x.strip()]
-    def parse_int_list(s):
-        return [int(float(x.strip())) for x in s.split(",") if x.strip()]
-
-    param_space = {
-        "period": parse_int_list(period_vals),
-        "oversold": parse_list(os_vals),
-        "overbought": parse_list(ob_vals),
-        "stop_loss": parse_list(sl_vals),
-        "take_profit": parse_list(tp_vals),
-        "max_holding_days": parse_int_list(hold_vals),
-    }
-    factory = make_rsi_strategy
-
-elif strat_type == "bollinger":
-    col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
-    with col_p1:
-        period_vals = st.text_input("period", "15, 20, 25", key="p_period_bb")
-    with col_p2:
-        std_vals = st.text_input("std_dev", "1.5, 2.0, 2.5", key="p_std_bb")
-    with col_p3:
-        sl_vals = st.text_input("stop_loss", "0.03, 0.05, 0.07", key="p_sl_bb")
-    with col_p4:
-        tp_vals = st.text_input("take_profit", "0.08, 0.12, 0.15", key="p_tp_bb")
-    with col_p5:
-        hold_vals = st.text_input("max_holding_days", "10, 15, 20, 30", key="p_hold_bb")
-
-    def parse_list(s):
-        return [float(x.strip()) for x in s.split(",") if x.strip()]
-    def parse_int_list(s):
-        return [int(float(x.strip())) for x in s.split(",") if x.strip()]
-
-    param_space = {
-        "period": parse_int_list(period_vals),
-        "std_dev": parse_list(std_vals),
-        "stop_loss": parse_list(sl_vals),
-        "take_profit": parse_list(tp_vals),
-        "max_holding_days": parse_int_list(hold_vals),
-    }
-    factory = make_bollinger_strategy
-
-else:  # macd
-    col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
-    with col_p1:
-        fast_vals = st.text_input("fast", "8, 12, 16", key="p_fast_macd")
-    with col_p2:
-        slow_vals = st.text_input("slow", "21, 26, 34", key="p_slow_macd")
-    with col_p3:
-        sig_vals  = st.text_input("signal", "7, 9, 12", key="p_sig_macd")
-    with col_p4:
-        sl_vals   = st.text_input("stop_loss", "0.04, 0.06, 0.08", key="p_sl_macd")
-    with col_p5:
-        tp_vals   = st.text_input("take_profit", "0.12, 0.18, 0.24", key="p_tp_macd")
-
-    def parse_list(s):
-        return [float(x.strip()) for x in s.split(",") if x.strip()]
-    def parse_int_list(s):
-        return [int(float(x.strip())) for x in s.split(",") if x.strip()]
-
-    param_space = {
-        "fast": parse_int_list(fast_vals),
-        "slow": parse_int_list(slow_vals),
-        "signal": parse_int_list(sig_vals),
-        "stop_loss": parse_list(sl_vals),
-        "take_profit": parse_list(tp_vals),
-    }
-    factory = make_macd_strategy
+    
+    # ── Grid de parámetros personalizable ────────────────────────────────────────
+    st.markdown("#### Espacio de parámetros")
+    st.caption("Ingresa los valores como lista separada por comas. El motor evaluará todas las combinaciones.")
+    
+    # Parámetros específicos por tipo de estrategia
+    if strat_type == "sma_crossover":
+        col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+        with col_p1:
+            fast_vals = st.text_input("fast (períodos MA rápida)", "10, 20, 30, 50", key="p_fast")
+        with col_p2:
+            slow_vals = st.text_input("slow (períodos MA lenta)", "50, 100, 150, 200", key="p_slow")
+        with col_p3:
+            sl_vals = st.text_input("stop_loss", "0.04, 0.06, 0.08", key="p_sl")
+        with col_p4:
+            tp_vals = st.text_input("take_profit", "0.10, 0.15, 0.20, 0.25", key="p_tp")
+    
+        def parse_list(s):
+            return [float(x.strip()) for x in s.split(",") if x.strip()]
+    
+        def parse_int_list(s):
+            return [int(float(x.strip())) for x in s.split(",") if x.strip()]
+    
+        param_space = {
+            "fast": parse_int_list(fast_vals),
+            "slow": parse_int_list(slow_vals),
+            "stop_loss": parse_list(sl_vals),
+            "take_profit": parse_list(tp_vals),
+        }
+        factory = make_sma_crossover_strategy
+    
+    elif strat_type == "ema_crossover":
+        col_p1, col_p2, col_p3, col_p4 = st.columns(4)
+        with col_p1:
+            fast_vals = st.text_input("fast", "5, 9, 12, 21", key="p_fast_ema")
+        with col_p2:
+            slow_vals = st.text_input("slow", "21, 34, 50, 89", key="p_slow_ema")
+        with col_p3:
+            sl_vals = st.text_input("stop_loss", "0.03, 0.05, 0.07", key="p_sl_ema")
+        with col_p4:
+            tp_vals = st.text_input("take_profit", "0.10, 0.15, 0.20", key="p_tp_ema")
+    
+        def parse_list(s):
+            return [float(x.strip()) for x in s.split(",") if x.strip()]
+        def parse_int_list(s):
+            return [int(float(x.strip())) for x in s.split(",") if x.strip()]
+    
+        param_space = {
+            "fast": parse_int_list(fast_vals),
+            "slow": parse_int_list(slow_vals),
+            "stop_loss": parse_list(sl_vals),
+            "take_profit": parse_list(tp_vals),
+        }
+        factory = make_ema_crossover_strategy
+    
+    elif strat_type == "rsi":
+        col_p1, col_p2, col_p3, col_p4, col_p5, col_p6 = st.columns(6)
+        with col_p1:
+            period_vals = st.text_input("period", "9, 14, 21", key="p_period_rsi")
+        with col_p2:
+            os_vals = st.text_input("oversold", "20, 25, 30", key="p_os_rsi")
+        with col_p3:
+            ob_vals = st.text_input("overbought", "65, 70, 75, 80", key="p_ob_rsi")
+        with col_p4:
+            sl_vals = st.text_input("stop_loss", "0.03, 0.05", key="p_sl_rsi")
+        with col_p5:
+            tp_vals = st.text_input("take_profit", "0.08, 0.12, 0.15", key="p_tp_rsi")
+        with col_p6:
+            hold_vals = st.text_input("max_holding_days", "15, 20, 30", key="p_hold_rsi")
+    
+        def parse_list(s):
+            return [float(x.strip()) for x in s.split(",") if x.strip()]
+        def parse_int_list(s):
+            return [int(float(x.strip())) for x in s.split(",") if x.strip()]
+    
+        param_space = {
+            "period": parse_int_list(period_vals),
+            "oversold": parse_list(os_vals),
+            "overbought": parse_list(ob_vals),
+            "stop_loss": parse_list(sl_vals),
+            "take_profit": parse_list(tp_vals),
+            "max_holding_days": parse_int_list(hold_vals),
+        }
+        factory = make_rsi_strategy
+    
+    elif strat_type == "bollinger":
+        col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
+        with col_p1:
+            period_vals = st.text_input("period", "15, 20, 25", key="p_period_bb")
+        with col_p2:
+            std_vals = st.text_input("std_dev", "1.5, 2.0, 2.5", key="p_std_bb")
+        with col_p3:
+            sl_vals = st.text_input("stop_loss", "0.03, 0.05, 0.07", key="p_sl_bb")
+        with col_p4:
+            tp_vals = st.text_input("take_profit", "0.08, 0.12, 0.15", key="p_tp_bb")
+        with col_p5:
+            hold_vals = st.text_input("max_holding_days", "10, 15, 20, 30", key="p_hold_bb")
+    
+        def parse_list(s):
+            return [float(x.strip()) for x in s.split(",") if x.strip()]
+        def parse_int_list(s):
+            return [int(float(x.strip())) for x in s.split(",") if x.strip()]
+    
+        param_space = {
+            "period": parse_int_list(period_vals),
+            "std_dev": parse_list(std_vals),
+            "stop_loss": parse_list(sl_vals),
+            "take_profit": parse_list(tp_vals),
+            "max_holding_days": parse_int_list(hold_vals),
+        }
+        factory = make_bollinger_strategy
+    
+    else:  # macd
+        col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(5)
+        with col_p1:
+            fast_vals = st.text_input("fast", "8, 12, 16", key="p_fast_macd")
+        with col_p2:
+            slow_vals = st.text_input("slow", "21, 26, 34", key="p_slow_macd")
+        with col_p3:
+            sig_vals  = st.text_input("signal", "7, 9, 12", key="p_sig_macd")
+        with col_p4:
+            sl_vals   = st.text_input("stop_loss", "0.04, 0.06, 0.08", key="p_sl_macd")
+        with col_p5:
+            tp_vals   = st.text_input("take_profit", "0.12, 0.18, 0.24", key="p_tp_macd")
+    
+        def parse_list(s):
+            return [float(x.strip()) for x in s.split(",") if x.strip()]
+        def parse_int_list(s):
+            return [int(float(x.strip())) for x in s.split(",") if x.strip()]
+    
+        param_space = {
+            "fast": parse_int_list(fast_vals),
+            "slow": parse_int_list(slow_vals),
+            "signal": parse_int_list(sig_vals),
+            "stop_loss": parse_list(sl_vals),
+            "take_profit": parse_list(tp_vals),
+        }
+        factory = make_macd_strategy
 
 # Calcular tamaño del grid
 if not use_library_mode:
