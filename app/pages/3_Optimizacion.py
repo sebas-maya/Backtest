@@ -358,6 +358,12 @@ if run_btn:
                 
                 progress_bar.progress(100, text="✅ Optimización completa!")
                 status_box.success(f"✅ Optimización completada para {selected_strategy_name}")
+                
+                # Guardar resultados en session_state (modo Biblioteca)
+                st.session_state["opt_report"] = report
+                st.session_state["opt_ticker"] = opt_ticker
+                st.session_state["opt_strategy_type"] = "library"
+                st.session_state["opt_grid_df"] = grid_df
             
             else:
                 # ── MODO TIPO ESPECÍFICO: Usar lógica original ───────────────
@@ -418,30 +424,23 @@ if run_btn:
                 best_result = optimizer.best_result
                 progress_bar.progress(100, text="✅ Optimización completa!")
                 status_box.success(f"✅ Optimización completada: {best_strategy.name if best_strategy else 'N/A'}")
-
-            # Guardar en estado
-            from optimizer import OptimizationReport
-            report = OptimizationReport(
-                ticker=opt_ticker,
-                optimize_metric=opt_metric,
-                best_params=optimizer.best_params,
-                best_result=optimizer.best_result,
-                grid_results=grid_df,
-                wfo_results=wfo_df,
-                mc_stats=mc_stats,
-                sensitivity_results=sensitivity_df,
-            )
-            st.session_state["opt_report"] = report
-            st.session_state["opt_ticker"] = opt_ticker
-            st.session_state["opt_strategy_type"] = strat_type
-            st.session_state["opt_grid_df"] = grid_df
-
-            progress_bar.progress(100, text="¡Optimización completada!")
-            status_box.success(
-                f"✅ Optimización completada — {len(grid_df)} combinaciones válidas | "
-                f"Mejor {metric_label}: {grid_df.iloc[0].get(opt_metric, 'N/A'):.4f} | "
-                f"Params: {optimizer.best_params}"
-            )
+                
+                # Crear report y guardar en session_state (modo Tipo Específico)
+                from optimizer import OptimizationReport
+                report = OptimizationReport(
+                    ticker=opt_ticker,
+                    optimize_metric=opt_metric,
+                    best_params=optimizer.best_params,
+                    best_result=optimizer.best_result,
+                    grid_results=grid_df,
+                    wfo_results=wfo_df,
+                    mc_stats=mc_stats,
+                    sensitivity_results=sensitivity_df,
+                )
+                st.session_state["opt_report"] = report
+                st.session_state["opt_ticker"] = opt_ticker
+                st.session_state["opt_strategy_type"] = strat_type
+                st.session_state["opt_grid_df"] = grid_df
 
         except Exception as e:
             st.error(f"Error durante la optimización: {e}")
