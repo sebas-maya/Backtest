@@ -1,1 +1,43 @@
-sadhasdhdas
+
+Framework de Backtest — Arquitectura completa
+
+
+Módulos
+
+Archivo	Descripción
+data_loader.py	Descarga datos de Yahoo Finance en formato long (tidy). Caché local en Parquet. Universo predefinido de índices, acciones y ETFs.
+indicators.py	24 indicadores técnicos implementados en pandas: SMA, EMA, WMA, DEMA, TEMA, RSI, MACD, Stochastic, Bollinger, Keltner, ATR, ADX, OBV, CMF, MFI, CCI, Williams %R, ROC, VWAP, PSAR, Donchian, SuperTrend, Ichimoku, HVol.
+strategies.py	DSL flexible con clases Signal, Rule y Strategy. 30 estrategias predefinidas en 6 categorías. PositionSizer con 6 modos: fixed, volatility, Kelly, dynamic, percent_risk.
+backtest_engine.py	Motor barra a barra sin lookahead bias. Stop-loss, take-profit, trailing stop, max holding days. 20+ métricas: CAGR, Sharpe, Sortino, Calmar, Omega, Profit Factor, VaR, CVaR, MAE/MFE, etc. Trade log detallado.
+strategy_scanner.py	Evalúa las 30 estrategias sobre un ticker. Score compuesto. Resumen ejecutivo por categoría. Exporta CSV/Excel.
+optimizer.py	Grid Search + Walk-Forward Optimization (anti-overfitting) + Monte Carlo + análisis de sensibilidad. Reporte exportable a Excel con todas las series temporales.
+visualization.py	13 gráficos interactivos con Plotly: equity curve, drawdown, candlestick con señales, heatmap de optimización, Monte Carlo fan chart, retornos mensuales, dashboard completo multi-panel, etc.
+main.py	CLI con 5 modos: scan, deep, multi, custom, demo.
+Uso rápido
+
+# Scan general (todas las estrategias)
+python main.py --mode scan --ticker AAPL --period 5y
+
+# Análisis profundo + optimización RSI
+python main.py --mode deep --ticker MSFT --strategy rsi --metric sharpe_ratio
+
+# Comparación multi-ticker
+python main.py --mode multi --tickers AAPL,MSFT,GOOGL,TSLA
+
+# Demo completo interactivo
+python main.py --mode demo
+# Estrategia personalizada (ejemplo del enunciado)
+from strategies import Strategy, Signal, Rule, PositionSizer
+
+strategy = Strategy(
+    name="Mi_Estrategia",
+    entry=Rule([
+        Signal.crossover("close", "sma_100"),
+        Signal.above_threshold("volume", "sma_20", factor=1.5),
+    ]),
+    exit=Signal.crossunder("close", "sma_20"),
+    stop_loss=0.06,
+    take_profit=0.18,
+    max_holding_days=10,
+    position_sizer=PositionSizer(mode="dynamic", fraction=0.10),
+)
