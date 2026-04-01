@@ -785,7 +785,7 @@ with st.expander("Ver series de tiempo completas"):
         st.download_button(
             "⬇️ Descargar series de tiempo CSV",
             data=csv_ts,
-            file_name=f"{opt_ticker_saved}_{strat_type}_timeseries.csv",
+            file_name=f"{opt_ticker_saved}_{opt_strat_type_saved}_timeseries.csv",
             mime="text/csv",
         )
 
