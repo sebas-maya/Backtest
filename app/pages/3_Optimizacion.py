@@ -353,9 +353,8 @@ if run_btn:
                 # Extraer resultados del report
                 grid_df = report.grid_results
                 wfo_df = report.wfo_results if run_wfo else pd.DataFrame()
-                mc_df = report.monte_carlo_results if run_mc else pd.DataFrame()
-                best_strategy = report.best_strategy
-                best_result = report.best_result
+                # mc_stats está en report.mc_stats (Dict, se usa directamente)
+                # best_result está en report.best_result (se usa directamente)
                 
                 progress_bar.progress(100, text="✅ Optimización completa!")
                 status_box.success(f"✅ Optimización completada para {selected_strategy_name}")
@@ -411,10 +410,14 @@ if run_btn:
                     progress_bar.progress(95, text="Sensibilidad completada.")
                 
                 # Variables para compatibilidad
-                best_strategy = optimizer.best_strategy
+                # best_strategy no existe como atributo, reconstruir desde best_params
+                if optimizer.best_params:
+                    best_strategy = factory(**optimizer.best_params)
+                else:
+                    best_strategy = None
                 best_result = optimizer.best_result
                 progress_bar.progress(100, text="✅ Optimización completa!")
-                status_box.success(f"✅ Optimización completada: {optimizer.best_strategy.name if optimizer.best_strategy else 'N/A'}")
+                status_box.success(f"✅ Optimización completada: {best_strategy.name if best_strategy else 'N/A'}")
 
             # Guardar en estado
             from optimizer import OptimizationReport
