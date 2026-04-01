@@ -11,7 +11,10 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import streamlit as st
-from app.utils import init_state, get_long_df, get_ticker_list
+from app.utils import (
+    init_state, get_long_df, get_ticker_list, cached_download,
+    PERIOD_OPTIONS,
+)
 
 # ── Configuración global de la página ─────────────────────────────────────────
 st.set_page_config(
@@ -82,9 +85,83 @@ with st.sidebar:
         st.markdown(f"**{df['ticker'].nunique()} tickers** · **{len(df):,} filas**")
         date_range = f"{df['date'].min().date()} → {df['date'].max().date()}"
         st.caption(date_range)
+        
+        # ── Descarga rápida ──────────────────────────────────────────────
+        with st.expander("⬇️ Re-descargar datos"):
+            period_label_q = st.selectbox(
+                "Período histórico",
+                options=list(PERIOD_OPTIONS.keys()),
+                index=list(PERIOD_OPTIONS.keys()).index("5 años"),
+                key="home_period_select",
+            )
+            period_val_q = PERIOD_OPTIONS[period_label_q]
+            
+            interval_q = st.selectbox(
+                "Intervalo",
+                ["1d", "1wk"],
+                index=0,
+                key="home_interval_select",
+            )
+            
+            force_refresh = st.checkbox(
+                "Forzar re-descarga (ignorar caché)",
+                value=False,
+                key="home_force_refresh",
+            )
+            
+            if st.button("⬇️ Descargar", type="primary", use_container_width=True):
+                tickers = get_ticker_list()
+                if not tickers:
+                    st.error("No hay tickers en la lista. Agrega tickers en **Datos**.")
+                else:
+                    with st.spinner(f"Descargando {len(tickers)} tickers..."):
+                        try:
+                            if force_refresh:
+                                cached_download.clear()
+                            df = cached_download(tuple(tickers), period_val_q, interval_q)
+                            st.session_state["long_df"] = df
+                            st.session_state["selected_period"] = period_val_q
+                            st.success(f"✅ {df['ticker'].nunique()} tickers · {len(df):,} filas descargados")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
     else:
         st.warning("⚠️ Sin datos descargados")
-        st.caption("Ve a **Datos** para descargar.")
+        st.caption("Descarga datos rápidamente desde aquí:")
+        
+        # ── Descarga rápida ──────────────────────────────────────────────
+        with st.expander("⬇️ Descargar datos"):
+            period_label_q = st.selectbox(
+                "Período histórico",
+                options=list(PERIOD_OPTIONS.keys()),
+                index=list(PERIOD_OPTIONS.keys()).index("5 años"),
+                key="home_period_select",
+            )
+            period_val_q = PERIOD_OPTIONS[period_label_q]
+            
+            interval_q = st.selectbox(
+                "Intervalo",
+                ["1d", "1wk"],
+                index=0,
+                key="home_interval_select",
+            )
+            
+            tickers = get_ticker_list()
+            st.info(f"**{len(tickers)} tickers** listos para descargar")
+            
+            if st.button("⬇️ Descargar", type="primary", use_container_width=True):
+                if not tickers:
+                    st.error("No hay tickers en la lista. Agrega tickers en **Datos**.")
+                else:
+                    with st.spinner(f"Descargando {len(tickers)} tickers desde Yahoo Finance..."):
+                        try:
+                            df = cached_download(tuple(tickers), period_val_q, interval_q)
+                            st.session_state["long_df"] = df
+                            st.session_state["selected_period"] = period_val_q
+                            st.success(f"✅ {df['ticker'].nunique()} tickers · {len(df):,} filas")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error en descarga: {e}")
 
     st.divider()
     st.caption("**Navegación**")
@@ -105,7 +182,7 @@ st.markdown(
 st.divider()
 
 # Cards de navegación
-col1, col2, col3 = st.columns(3, gap="large")
+col1, col2 = st.columns(2, gap="large")
 
 with col1:
     st.markdown("""
@@ -138,6 +215,8 @@ with col2:
     """, unsafe_allow_html=True)
     st.page_link("pages/2_Scanner.py", label="Ir a Scanner →", use_container_width=True)
 
+col3, col4 = st.columns(2, gap="large")
+
 with col3:
     st.markdown("""
     <div style='background:#1e2130; border:1px solid #2d3250; border-radius:12px; padding:24px;'>
@@ -152,6 +231,40 @@ with col3:
     </div>
     """, unsafe_allow_html=True)
     st.page_link("pages/3_Optimizacion.py", label="Ir a Optimización →", use_container_width=True)
+
+with col4:
+    st.markdown("""
+    <div style='background:#1e2130; border:1px solid #2d3250; border-radius:12px; padding:24px;'>
+        <div style='font-size:2.5rem; margin-bottom:8px'>🎯</div>
+        <div style='font-size:1.2rem; font-weight:700; color:#00d4ff; margin-bottom:8px'>
+            Seguimiento
+        </div>
+        <div style='color:#aaa; font-size:0.9rem;'>
+            Monitorea trades activos, gestiona estrategias en seguimiento
+            y recibe alertas de señales de compra, venta, stop y profit en tiempo real.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/4_Seguimiento.py", label="Ir a Seguimiento →", use_container_width=True)
+
+st.markdown("")  # Spacer
+
+col5, col6 = st.columns(2, gap="large")
+
+with col5:
+    st.markdown("""
+    <div style='background:#1e2130; border:1px solid #2d3250; border-radius:12px; padding:24px;'>
+        <div style='font-size:2.5rem; margin-bottom:8px'>🏗️</div>
+        <div style='font-size:1.2rem; font-weight:700; color:#00d4ff; margin-bottom:8px'>
+            Constructor
+        </div>
+        <div style='color:#aaa; font-size:0.9rem;'>
+            Crea estrategias personalizadas definiendo condiciones de entrada, salida
+            y gestión de riesgo. Simula, analiza y agrega a la biblioteca.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.page_link("pages/5_Constructor.py", label="Ir a Constructor →", use_container_width=True)
 
 st.divider()
 

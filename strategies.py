@@ -941,6 +941,151 @@ def get_strategy(name: str) -> Strategy:
     return STRATEGY_LIBRARY[name]
 
 
+def add_strategy_to_library(strategy: Strategy) -> None:
+    """Agrega una nueva estrategia a la biblioteca global."""
+    STRATEGY_LIBRARY[strategy.name] = strategy
+
+
+def get_strategy_parameters(strategy: Strategy) -> Dict[str, Any]:
+    """Extrae los parámetros clave de una estrategia para optimización."""
+    params = {
+        "stop_loss": strategy.stop_loss,
+        "take_profit": strategy.take_profit,
+        "max_holding_days": strategy.max_holding_days,
+        "trailing_stop": strategy.trailing_stop,
+    }
+    
+    # Agregar parámetros custom si existen
+    if hasattr(strategy, "params") and strategy.params:
+        params.update(strategy.params)
+    
+    return {k: v for k, v in params.items() if v is not None}
+
+
+def create_custom_strategy(
+    name: str,
+    entry_conditions: List[Dict[str, Any]],
+    exit_conditions: Optional[List[Dict[str, Any]]] = None,
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
+    max_holding_days: Optional[int] = None,
+    trailing_stop: Optional[float] = None,
+    description: str = "",
+    category: str = "custom",
+) -> Strategy:
+    """
+    Crea una estrategia personalizada desde una definición estructurada.
+    
+    Parameters
+    ----------
+    entry_conditions : Lista de condiciones de entrada
+        Cada condición es un dict con:
+        {
+            "type": "crossover" | "crossunder" | "above" | "below",
+            "col_a": str,  # columna o indicador
+            "col_b": str | float,  # columna, indicador o valor
+        }
+    exit_conditions : Lista de condiciones de salida (opcional)
+    
+    Example
+    -------
+    strategy = create_custom_strategy(
+        name="Mi_SMA_Custom",
+        entry_conditions=[
+            {"type": "crossover", "col_a": "sma_20", "col_b": "sma_50"},
+            {"type": "above", "col_a": "close", "col_b": "sma_100"},
+        ],
+        stop_loss=0.05,
+        take_profit=0.15,
+    )
+    """
+    # Construir señales de entrada
+    entry_signals = []
+    for cond in entry_conditions:
+        cond_type = cond["type"]
+        col_a = cond["col_a"]
+        col_b = cond["col_b"]
+        
+        if cond_type == "crossover":
+            entry_signals.append(Signal.crossover(col_a, col_b))
+        elif cond_type == "crossunder":
+            entry_signals.append(Signal.crossunder(col_a, col_b))
+        elif cond_type == "above":
+            entry_signals.append(Signal.above(col_a, col_b))
+        elif cond_type == "below":
+            entry_signals.append(Signal.below(col_a, col_b))
+    
+    # Si no hay señales, crear una señal dummy que nunca se activa
+    if not entry_signals:
+        entry_signals.append(Signal(lambda df: pd.Series(False, index=df.index), "No entry"))
+    
+    entry_rule = Rule(entry_signals, combinator="AND")
+    
+    # Construir señales de salida
+    exit_rule = None
+    if exit_conditions:
+        exit_signals = []
+        for cond in exit_conditions:
+            cond_type = cond["type"]
+            col_a = cond["col_a"]
+            col_b = cond["col_b"]
+            
+            if cond_type == "crossover":
+                exit_signals.append(Signal.crossover(col_a, col_b))
+            elif cond_type == "crossunder":
+                exit_signals.append(Signal.crossunder(col_a, col_b))
+            elif cond_type == "above":
+                exit_signals.append(Signal.above(col_a, col_b))
+            elif cond_type == "below":
+                exit_signals.append(Signal.below(col_a, col_b))
+        
+        exit_rule = Rule(exit_signals, combinator="OR") if exit_signals else None
+    
+    return Strategy(
+        name=name,
+        entry=entry_rule,
+        exit=exit_rule,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        max_holding_days=max_holding_days,
+        trailing_stop=trailing_stop,
+        description=description or f"Estrategia personalizada: {name}",
+        category=category,
+    )
+
+
+def get_available_columns() -> List[str]:
+    """Retorna lista de columnas e indicadores disponibles para estrategias."""
+    return [
+        # Precio
+        "open", "high", "low", "close", "adj_close", "volume",
+        # SMAs
+        "sma_10", "sma_20", "sma_50", "sma_100", "sma_200",
+        # EMAs
+        "ema_9", "ema_12", "ema_21", "ema_26", "ema_50", "ema_100", "ema_200",
+        # MACD
+        "macd", "macd_signal", "macd_hist",
+        # RSI
+        "rsi_14",
+        # Bollinger Bands
+        "bb_upper_20", "bb_mid_20", "bb_lower_20", "bb_width_20",
+        # Stochastic
+        "stoch_k", "stoch_d",
+        # ATR
+        "atr_14",
+        # ADX
+        "adx_14", "plus_di_14", "minus_di_14",
+        # Volume
+        "volume_sma_20", "obv", "mfi_14", "cmf_20",
+        # Otros
+        "cci_20", "williams_r_14", "roc_10",
+        "dema_21", "tema_21",
+        "keltner_upper_20", "keltner_mid_20", "keltner_lower_20",
+        "donchian_upper_20", "donchian_mid_20", "donchian_lower_20",
+        "supertrend_10", "supertrend_signal_10",
+    ]
+
+
 if __name__ == "__main__":
     print("=== Biblioteca de Estrategias ===")
     df = list_strategies()

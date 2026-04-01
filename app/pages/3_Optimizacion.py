@@ -28,8 +28,9 @@ from optimizer import (
     StrategyOptimizer, ParameterGrid,
     make_sma_crossover_strategy, make_ema_crossover_strategy,
     make_rsi_strategy, make_bollinger_strategy, make_macd_strategy,
-    STRATEGY_FACTORIES,
+    STRATEGY_FACTORIES, optimize_any_strategy, create_auto_param_grid,
 )
+from strategies import STRATEGY_LIBRARY, list_strategies, get_strategy
 from visualization import (
     plot_full_dashboard, plot_equity_curve, plot_drawdown,
     plot_optimization_heatmap, plot_monte_carlo,
@@ -52,6 +53,8 @@ with st.sidebar:
     st.page_link("pages/1_Datos.py", label="🗂️ Datos & Tickers")
     st.page_link("pages/2_Scanner.py", label="🔍 Scanner")
     st.page_link("pages/3_Optimizacion.py", label="⚡ Optimización")
+    st.page_link("pages/4_Seguimiento.py", label="🎯 Seguimiento")
+    st.page_link("pages/5_Constructor.py", label="🏗️ Constructor")
     st.divider()
     cfg = backtest_config_sidebar()
 
@@ -71,19 +74,70 @@ available_tickers = get_available_tickers(df)
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("### 1 · Configurar Optimización")
 
-oc1, oc2, oc3 = st.columns([2, 2, 2])
-with oc1:
-    opt_ticker = st.selectbox("Ticker", options=available_tickers, key="opt_ticker_sel")
-with oc2:
-    strat_label = st.selectbox("Tipo de estrategia",
-                                list(STRATEGY_TYPE_OPTIONS.keys()),
-                                key="opt_strat_type")
-    strat_type = STRATEGY_TYPE_OPTIONS[strat_label]
-with oc3:
-    metric_label = st.selectbox("Métrica a optimizar",
-                                  list(METRIC_OPTIONS.keys()),
-                                  key="opt_metric_sel")
-    opt_metric = METRIC_OPTIONS[metric_label]
+# Selector de modo: optimizar estrategia de biblioteca o tipo específico
+optimization_mode = st.radio(
+    "Modo de Optimización",
+    ["🎯 Cualquier Estrategia de la Biblioteca", "🔧 Tipo Específico con Parámetros Personalizados"],
+    key="opt_mode",
+    help="Biblioteca: optimiza cualquier estrategia existente. Tipo Específico: define grids de parámetros personalizados.",
+)
+
+use_library_mode = optimization_mode.startswith("🎯")
+
+if use_library_mode:
+    # ── MODO: Optimizar cualquier estrategia ────────────────────────────────
+    oc1, oc2, oc3, oc4 = st.columns([2, 2, 2, 1])
+    with oc1:
+        opt_ticker = st.selectbox("Ticker", options=available_tickers, key="opt_ticker_sel")
+    with oc2:
+        strategy_names = list(STRATEGY_LIBRARY.keys())
+        selected_strategy_name = st.selectbox(
+            "Estrategia",
+            strategy_names,
+            key="opt_strategy_lib",
+        )
+    with oc3:
+        metric_label = st.selectbox("Métrica a optimizar",
+                                      list(METRIC_OPTIONS.keys()),
+                                      key="opt_metric_sel")
+        opt_metric = METRIC_OPTIONS[metric_label]
+    with oc4:
+        granularity = st.selectbox(
+            "Granularidad",
+            ["coarse", "medium", "fine"],
+            index=1,
+            key="opt_granularity",
+            help="coarse: ~20 combos | medium: ~100 combos | fine: ~400 combos"
+        )
+    
+    # Mostrar info de la estrategia seleccionada
+    selected_strategy = get_strategy(selected_strategy_name)
+    st.info(
+        f"**{selected_strategy.name}**  \n"
+        f"Categoría: {selected_strategy.category} | "
+        f"SL: {selected_strategy.stop_loss or 'N/A'} | "
+        f"TP: {selected_strategy.take_profit or 'N/A'} | "
+        f"Max Days: {selected_strategy.max_holding_days or 'N/A'}"
+    )
+    
+    # Se optimizarán automáticamente: stop_loss, take_profit, max_holding_days
+    st.caption("⚙️ Se optimizarán automáticamente: stop_loss, take_profit, max_holding_days")
+    
+else:
+    # ── MODO: Tipo específico con parámetros personalizados ──────────────────
+    oc1, oc2, oc3 = st.columns([2, 2, 2])
+    with oc1:
+        opt_ticker = st.selectbox("Ticker", options=available_tickers, key="opt_ticker_sel")
+    with oc2:
+        strat_label = st.selectbox("Tipo de estrategia",
+                                    list(STRATEGY_TYPE_OPTIONS.keys()),
+                                    key="opt_strat_type")
+        strat_type = STRATEGY_TYPE_OPTIONS[strat_label]
+    with oc3:
+        metric_label = st.selectbox("Métrica a optimizar",
+                                      list(METRIC_OPTIONS.keys()),
+                                      key="opt_metric_sel")
+        opt_metric = METRIC_OPTIONS[metric_label]
 
 # ── Grid de parámetros personalizable ────────────────────────────────────────
 st.markdown("#### Espacio de parámetros")
@@ -224,13 +278,18 @@ else:  # macd
     factory = make_macd_strategy
 
 # Calcular tamaño del grid
-try:
-    grid = ParameterGrid(param_space)
-    grid_size = len(grid)
-except Exception:
-    grid_size = 0
-
-st.info(f"**Grid size: {grid_size} combinaciones** a evaluar.")
+if not use_library_mode:
+    try:
+        grid = ParameterGrid(param_space)
+        grid_size = len(grid)
+    except Exception:
+        grid_size = 0
+    st.info(f"**Grid size: {grid_size} combinaciones** a evaluar.")
+else:
+    # En modo biblioteca, el grid se crea automáticamente
+    temp_grid = create_auto_param_grid(selected_strategy, granularity=granularity)
+    grid_size = len(temp_grid)
+    st.info(f"**Grid automático: {grid_size} combinaciones** a evaluar (stop_loss, take_profit, max_holding_days).")
 
 # ── Opciones avanzadas ────────────────────────────────────────────────────────
 with st.expander("⚙️ Opciones avanzadas"):
@@ -270,52 +329,92 @@ if run_btn:
 
     with st.spinner(""):
         try:
-            grid_obj = ParameterGrid(param_space)
-            optimizer = StrategyOptimizer(
-                strategy_factory=factory,
-                param_grid=grid_obj,
-                config=cfg,
-                optimize_metric=opt_metric,
-            )
-
-            # Grid Search
-            status_box.info("🔎 Ejecutando Grid Search...")
-            progress_bar.progress(10, text="Grid Search...")
-            grid_df = optimizer.grid_search(df, ticker=opt_ticker,
-                                             min_trades=int(min_trades), verbose=False)
-            progress_bar.progress(40, text="Grid Search completado.")
-
-            # WFO
-            wfo_df = pd.DataFrame()
-            if run_wfo and optimizer.best_params:
-                status_box.info("🔄 Walk-Forward Optimization...")
-                progress_bar.progress(50, text="Walk-Forward...")
-                wfo_df = optimizer.walk_forward(
-                    df, ticker=opt_ticker,
-                    n_splits=int(n_splits), verbose=False
-                )
-                progress_bar.progress(70, text="WFO completado.")
-
-            # Monte Carlo
-            mc_stats = {}
-            if run_mc and optimizer.best_result:
-                status_box.info("🎲 Monte Carlo...")
-                progress_bar.progress(75, text="Monte Carlo...")
-                mc_stats = optimizer.monte_carlo(
-                    optimizer.best_result,
-                    n_simulations=int(n_mc),
+            if use_library_mode:
+                # ── MODO BIBLIOTECA: Usar optimize_any_strategy ──────────────
+                status_box.info(f"🔎 Optimizando {selected_strategy_name}...")
+                progress_bar.progress(10, text="Optimización iniciada...")
+                
+                # Ejecutar optimización automática
+                report = optimize_any_strategy(
+                    strategy=selected_strategy,
+                    df=df,
+                    ticker=opt_ticker,
+                    param_grid=None,  # Se crea automáticamente
+                    config=cfg,
+                    optimize_metric=opt_metric,
+                    run_wfo=run_wfo,
+                    run_mc=run_mc,
+                    granularity=granularity,
                     verbose=False,
                 )
-                progress_bar.progress(90, text="Monte Carlo completado.")
-
-            # Sensibilidad
-            sensitivity_df = pd.DataFrame()
-            if run_sensitivity and optimizer.best_params:
-                status_box.info("📊 Análisis de sensibilidad...")
-                sensitivity_df = optimizer.sensitivity_analysis(
-                    df, ticker=opt_ticker, verbose=False
+                
+                progress_bar.progress(80, text="Optimización completada.")
+                
+                # Extraer resultados del report
+                grid_df = report.grid_results
+                wfo_df = report.wfo_results if run_wfo else pd.DataFrame()
+                mc_df = report.monte_carlo_results if run_mc else pd.DataFrame()
+                best_strategy = report.best_strategy
+                best_result = report.best_result
+                
+                progress_bar.progress(100, text="✅ Optimización completa!")
+                status_box.success(f"✅ Optimización completada para {selected_strategy_name}")
+            
+            else:
+                # ── MODO TIPO ESPECÍFICO: Usar lógica original ───────────────
+                grid_obj = ParameterGrid(param_space)
+                optimizer = StrategyOptimizer(
+                    strategy_factory=factory,
+                    param_grid=grid_obj,
+                    config=cfg,
+                    optimize_metric=opt_metric,
                 )
-                progress_bar.progress(95, text="Sensibilidad completada.")
+
+                # Grid Search
+                status_box.info("🔎 Ejecutando Grid Search...")
+                progress_bar.progress(10, text="Grid Search...")
+                grid_df = optimizer.grid_search(df, ticker=opt_ticker,
+                                                 min_trades=int(min_trades), verbose=False)
+                progress_bar.progress(40, text="Grid Search completado.")
+
+                # WFO
+                wfo_df = pd.DataFrame()
+                if run_wfo and optimizer.best_params:
+                    status_box.info("🔄 Walk-Forward Optimization...")
+                    progress_bar.progress(50, text="Walk-Forward...")
+                    wfo_df = optimizer.walk_forward(
+                        df, ticker=opt_ticker,
+                        n_splits=int(n_splits), verbose=False
+                    )
+                    progress_bar.progress(70, text="WFO completado.")
+
+                # Monte Carlo
+                mc_df = pd.DataFrame()
+                mc_stats = {}
+                if run_mc and optimizer.best_result:
+                    status_box.info("🎲 Monte Carlo...")
+                    progress_bar.progress(75, text="Monte Carlo...")
+                    mc_stats = optimizer.monte_carlo(
+                        optimizer.best_result,
+                        n_simulations=int(n_mc),
+                        verbose=False,
+                    )
+                    progress_bar.progress(90, text="Monte Carlo completado.")
+
+                # Sensibilidad
+                sensitivity_df = pd.DataFrame()
+                if run_sensitivity and optimizer.best_params:
+                    status_box.info("📊 Análisis de sensibilidad...")
+                    sensitivity_df = optimizer.sensitivity_analysis(
+                        df, ticker=opt_ticker, verbose=False
+                    )
+                    progress_bar.progress(95, text="Sensibilidad completada.")
+                
+                # Variables para compatibilidad
+                best_strategy = optimizer.best_strategy
+                best_result = optimizer.best_result
+                progress_bar.progress(100, text="✅ Optimización completa!")
+                status_box.success(f"✅ Optimización completada: {optimizer.best_strategy.name if optimizer.best_strategy else 'N/A'}")
 
             # Guardar en estado
             from optimizer import OptimizationReport

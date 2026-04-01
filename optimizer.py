@@ -899,6 +899,136 @@ def optimize_strategy(
     )
 
 
+def create_auto_param_grid(strategy: Strategy, granularity: str = "medium") -> ParameterGrid:
+    """
+    Crea automáticamente un grid de parámetros para optimizar una estrategia.
+    
+    Parameters
+    ----------
+    strategy : Strategy object
+    granularity : "coarse" | "medium" | "fine"
+        - coarse: 2-3 valores por parámetro (~16-27 combinaciones)
+        - medium: 3-4 valores por parámetro (~81-256 combinaciones)
+        - fine: 5+ valores por parámetro (>625 combinaciones)
+    
+    Returns
+    -------
+    ParameterGrid con stop_loss, take_profit, max_holding_days y trailing_stop
+    """
+    if granularity == "coarse":
+        param_space = {
+            "stop_loss": [0.03, 0.06, 0.10] if strategy.stop_loss else [None],
+            "take_profit": [0.08, 0.15, 0.25] if strategy.take_profit else [None],
+            "max_holding_days": [10, 30, 60] if strategy.max_holding_days else [None],
+        }
+    elif granularity == "fine":
+        param_space = {
+            "stop_loss": [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10],
+            "take_profit": [0.06, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.25, 0.30],
+            "max_holding_days": [5, 10, 15, 20, 30, 45, 60, 90],
+        }
+    else:  # medium
+        param_space = {
+            "stop_loss": [0.03, 0.04, 0.05, 0.06, 0.08],
+            "take_profit": [0.08, 0.10, 0.12, 0.15, 0.18, 0.20],
+            "max_holding_days": [10, 20, 30, 45, 60],
+        }
+    
+    # Agregar trailing_stop si la estrategia lo usa
+    if strategy.trailing_stop:
+        if granularity == "coarse":
+            param_space["trailing_stop"] = [0.05, 0.10, 0.15]
+        elif granularity == "fine":
+            param_space["trailing_stop"] = [0.03, 0.05, 0.07, 0.10, 0.12, 0.15]
+        else:
+            param_space["trailing_stop"] = [0.05, 0.08, 0.10, 0.12, 0.15]
+    
+    # Filtrar None values
+    param_space = {k: [x for x in v if x is not None] for k, v in param_space.items()}
+    param_space = {k: v for k, v in param_space.items() if v}
+    
+    return ParameterGrid(param_space)
+
+
+def optimize_any_strategy(
+    strategy: Strategy,
+    df: pd.DataFrame,
+    ticker: str,
+    param_grid: Optional[ParameterGrid] = None,
+    config: Optional[BacktestConfig] = None,
+    optimize_metric: str = "sharpe_ratio",
+    run_wfo: bool = True,
+    run_mc: bool = True,
+    granularity: str = "medium",
+    verbose: bool = True,
+) -> OptimizationReport:
+    """
+    Optimiza CUALQUIER estrategia del STRATEGY_LIBRARY o personalizada.
+    
+    Si no se proporciona param_grid, se crea automáticamente basado en
+    los parámetros de la estrategia (stop_loss, take_profit, max_holding_days).
+    
+    Parameters
+    ----------
+    strategy : Strategy
+        Cualquier estrategia (de la biblioteca o personalizada)
+    df : DataFrame
+        Datos históricos
+    ticker : str
+        Símbolo del activo
+    param_grid : ParameterGrid (opcional)
+        Si no se proporciona, se genera automáticamente
+    granularity : str
+        "coarse" | "medium" | "fine" - solo si param_grid es None
+    
+    Example
+    -------
+    from strategies import get_strategy
+    strategy = get_strategy("ROC_Momentum")
+    report = optimize_any_strategy(strategy, df, "AAPL")
+    """
+    # Si no hay grid, crear uno automático
+    if param_grid is None:
+        param_grid = create_auto_param_grid(strategy, granularity=granularity)
+        if verbose:
+            print(f"📊 Grid automático: {len(param_grid)} combinaciones")
+            print(f"   Parámetros: {list(param_grid.param_space.keys())}")
+    
+    # Crear factory que modifica la estrategia base
+    def strategy_factory(**params):
+        # Clonar estrategia
+        import copy
+        new_strat = copy.deepcopy(strategy)
+        
+        # Actualizar parámetros
+        if "stop_loss" in params:
+            new_strat.stop_loss = params["stop_loss"]
+        if "take_profit" in params:
+            new_strat.take_profit = params["take_profit"]
+        if "max_holding_days" in params:
+            new_strat.max_holding_days = params["max_holding_days"]
+        if "trailing_stop" in params:
+            new_strat.trailing_stop = params["trailing_stop"]
+        
+        # Actualizar nombre para reflejar params
+        param_str = "_".join([f"{k[:2]}{v}" for k, v in params.items() if v is not None])
+        new_strat.name = f"{strategy.name}_{param_str}"
+        
+        return new_strat
+    
+    # Crear optimizador
+    optimizer = StrategyOptimizer(
+        strategy_factory=strategy_factory,
+        param_grid=param_grid,
+        config=config or BacktestConfig(),
+        optimize_metric=optimize_metric,
+    )
+    
+    return optimizer.full_analysis(
+        df, ticker, run_wfo=run_wfo, run_mc=run_mc, verbose=verbose
+    )
+
+
 # ---------------------------------------------------------------------------
 # Ejecución directa
 # ---------------------------------------------------------------------------

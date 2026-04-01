@@ -19,17 +19,25 @@ if ROOT not in sys.path:
 import warnings
 warnings.filterwarnings("ignore")
 
+import json
+import logging
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict
+
+logger = logging.getLogger(__name__)
 
 # ── Imports del modelo ────────────────────────────────────────────────────────
 from data_loader import (
     download_data, get_data_summary, get_available_tickers,
     INDICES, EQUITIES_US, ETFS,
 )
-from strategies import STRATEGY_LIBRARY, list_strategies
+from strategies import (
+    STRATEGY_LIBRARY, list_strategies, create_custom_strategy,
+    add_strategy_to_library, get_available_columns,
+)
 from backtest_engine import BacktestEngine, BacktestConfig
 from strategy_scanner import StrategyScanner
 from optimizer import (
@@ -37,6 +45,7 @@ from optimizer import (
     make_sma_crossover_strategy, make_ema_crossover_strategy,
     make_rsi_strategy, make_bollinger_strategy, make_macd_strategy,
     PARAM_GRIDS, STRATEGY_FACTORIES,
+    optimize_any_strategy, create_auto_param_grid,
 )
 from visualization import (
     plot_equity_curve, plot_drawdown, plot_trades,
@@ -94,6 +103,11 @@ METRIC_OPTIONS = {
 
 def init_state() -> None:
     """Inicializa todos los valores del session state con sus defaults."""
+    
+    # Cargar estrategias rastreadas desde disco (solo la primera vez)
+    if "tracked_strategies" not in st.session_state:
+        st.session_state["tracked_strategies"] = load_tracked_strategies_from_disk()
+    
     defaults = {
         "ticker_list": DEFAULT_TICKERS.copy(),
         "long_df": None,
@@ -107,6 +121,10 @@ def init_state() -> None:
         "opt_strategy_type": None,
         "opt_report": None,
         "opt_grid_df": None,
+        # tracked_strategies ya inicializado arriba desde disco
+        "tracking_cache": {},      # Cache de backtests: {(ticker, strategy_name): BacktestResult}
+        "custom_strategies": [],   # Lista de estrategias personalizadas
+        "builder_conditions": [],  # Condiciones temporales del constructor
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -128,9 +146,16 @@ def set_ticker_list(tickers: List[str]) -> None:
 # ── Data helpers ──────────────────────────────────────────────────────────────
 
 @st.cache_data(show_spinner=False, ttl=3600)
-def cached_download(tickers_tuple: tuple, period: str) -> pd.DataFrame:
-    """Descarga datos con caché de Streamlit (TTL 1h)."""
-    return download_data(list(tickers_tuple), period=period, cache_dir="data/cache")
+def cached_download(tickers_tuple: tuple, period: str, interval: str = "1d") -> pd.DataFrame:
+    """Descarga datos con caché de Streamlit (TTL 1h).
+    
+    Args:
+        tickers_tuple: Tupla de tickers para caché
+        period: Período histórico (e.g., '5y', '1y')
+        interval: Intervalo de datos ('1d', '1wk')
+    """
+    return download_data(list(tickers_tuple), period=period, 
+                        interval=interval, cache_dir="data/cache")
 
 
 @st.cache_data(show_spinner=False)
@@ -286,3 +311,241 @@ def page_header(title: str, subtitle: str = "") -> None:
         st.markdown(f"<p style='color: #888; margin-top:-10px'>{subtitle}</p>",
                     unsafe_allow_html=True)
     st.divider()
+
+
+# ── Persistence helpers ───────────────────────────────────────────────────────
+
+def load_tracked_strategies_from_disk() -> List[Dict]:
+    """
+    Carga estrategias rastreadas desde JSON en disco.
+    
+    Returns
+    -------
+    Lista de estrategias rastreadas. Lista vacía si no existe o hay error.
+    """
+    filepath = os.path.join(ROOT, "data", "tracked_strategies.json")
+    
+    if not os.path.exists(filepath):
+        return []
+    
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("tracked_strategies", [])
+    except json.JSONDecodeError as e:
+        logger.warning(f"JSON corrupto en tracked_strategies.json: {e}")
+        return []
+    except Exception as e:
+        logger.warning(f"Error cargando tracked strategies: {e}")
+        return []
+
+
+def save_tracked_strategies_to_disk(tracked: List[Dict]) -> bool:
+    """
+    Guarda estrategias rastreadas a JSON en disco.
+    
+    Parameters
+    ----------
+    tracked : Lista de estrategias rastreadas
+    
+    Returns
+    -------
+    True si se guardó exitosamente, False si hubo error.
+    """
+    filepath = os.path.join(ROOT, "data", "tracked_strategies.json")
+    
+    # Asegurar que el directorio existe
+    try:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    except Exception as e:
+        logger.error(f"Error creando directorio data/: {e}")
+        return False
+    
+    try:
+        data = {
+            "tracked_strategies": tracked,
+            "version": "1.0",
+            "last_updated": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error guardando tracked strategies: {e}")
+        return False
+
+
+# ── Tracking helpers ──────────────────────────────────────────────────────────
+
+def add_tracked_strategy(ticker: str, strategy_name: str) -> bool:
+    """Agrega una estrategia al seguimiento y persiste en disco."""
+    tracked = st.session_state.get("tracked_strategies", [])
+    
+    # Verificar si ya existe
+    for item in tracked:
+        if item["ticker"] == ticker and item["strategy_name"] == strategy_name:
+            return False
+    
+    tracked.append({
+        "ticker": ticker,
+        "strategy_name": strategy_name,
+        "added_date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    st.session_state["tracked_strategies"] = tracked
+    
+    # Guardar a disco
+    save_tracked_strategies_to_disk(tracked)
+    
+    return True
+
+
+def remove_tracked_strategy(ticker: str, strategy_name: str) -> bool:
+    """Elimina una estrategia del seguimiento y actualiza disco."""
+    tracked = st.session_state.get("tracked_strategies", [])
+    initial_len = len(tracked)
+    
+    tracked = [
+        item for item in tracked
+        if not (item["ticker"] == ticker and item["strategy_name"] == strategy_name)
+    ]
+    
+    st.session_state["tracked_strategies"] = tracked
+    
+    # Limpiar cache
+    cache_key = (ticker, strategy_name)
+    cache = st.session_state.get("tracking_cache", {})
+    if cache_key in cache:
+        del cache[cache_key]
+        st.session_state["tracking_cache"] = cache
+    
+    # Guardar a disco si hubo cambios
+    if len(tracked) < initial_len:
+        save_tracked_strategies_to_disk(tracked)
+    
+    return len(tracked) < initial_len
+
+
+def get_tracked_strategies() -> List[Dict]:
+    """Retorna la lista de estrategias en seguimiento."""
+    return st.session_state.get("tracked_strategies", [])
+
+
+def run_tracking_backtest(ticker: str, strategy_name: str, df: pd.DataFrame) -> Optional[Any]:
+    """Ejecuta backtest para una estrategia en seguimiento (con cache)."""
+    cache_key = (ticker, strategy_name)
+    cache = st.session_state.get("tracking_cache", {})
+    
+    # Verificar cache
+    if cache_key in cache:
+        return cache[cache_key]
+    
+    # Ejecutar backtest
+    try:
+        strategy = STRATEGY_LIBRARY.get(strategy_name)
+        if strategy is None:
+            return None
+        
+        engine = BacktestEngine(config=BacktestConfig(
+            initial_capital=100_000,
+            commission_pct=0.001,
+            slippage_pct=0.0005,
+        ))
+        
+        result = engine.run(df, strategy, ticker=ticker, add_indicators=True)
+        
+        # Guardar en cache
+        cache[cache_key] = result
+        st.session_state["tracking_cache"] = cache
+        
+        return result
+    except Exception as e:
+        st.error(f"Error en backtest {ticker}/{strategy_name}: {e}")
+        return None
+
+
+def detect_active_trades(result: Any) -> Optional[Dict]:
+    """Detecta si hay un trade activo en el último día del backtest."""
+    if result is None or not hasattr(result, "df_with_signals"):
+        return None
+    
+    df = result.df_with_signals
+    if df is None or df.empty:
+        return None
+    
+    # Obtener trades cerrados
+    trades = result.trades if hasattr(result, "trades") else []
+    
+    # Si hay trades, verificar el último
+    if len(trades) > 0:
+        last_trade = trades[-1]
+        
+        # Si el último trade no tiene exit_date, está activo
+        if last_trade.exit_date is None or pd.isna(last_trade.exit_date):
+            last_date = df.index[-1]
+            last_price = df["close"].iloc[-1]
+            
+            # Calcular retorno actual
+            entry_price = last_trade.entry_price
+            pnl_pct = ((last_price - entry_price) / entry_price) * 100
+            
+            # Calcular días en posición
+            days_held = (last_date - last_trade.entry_date).days
+            
+            return {
+                "status": "ACTIVO",
+                "entry_date": last_trade.entry_date.strftime("%Y-%m-%d"),
+                "entry_price": round(entry_price, 2),
+                "current_price": round(last_price, 2),
+                "shares": round(last_trade.shares, 2),
+                "pnl_pct": round(pnl_pct, 2),
+                "days_held": days_held,
+                "stop_loss": round(last_trade.stop_loss_price, 2) if last_trade.stop_loss_price else None,
+                "take_profit": round(last_trade.take_profit_price, 2) if last_trade.take_profit_price else None,
+            }
+    
+    return None
+
+
+def detect_signals_next_bar(result: Any) -> Dict:
+    """Detecta señales que se ejecutarían en la próxima vela."""
+    signals = {
+        "buy_signal": False,
+        "sell_signal": False,
+        "stop_signal": False,
+        "profit_signal": False,
+    }
+    
+    if result is None or not hasattr(result, "df_with_signals"):
+        return signals
+    
+    df = result.df_with_signals
+    if df is None or df.empty:
+        return signals
+    
+    # Última barra
+    last_idx = df.index[-1]
+    last_row = df.loc[last_idx]
+    
+    # Verificar señales de entrada/salida
+    if hasattr(last_row, "entry_signal") and last_row.entry_signal:
+        signals["buy_signal"] = True
+    
+    if hasattr(last_row, "exit_signal") and last_row.exit_signal:
+        signals["sell_signal"] = True
+    
+    # Verificar si hay trade activo para stop/profit
+    active_trade = detect_active_trades(result)
+    if active_trade:
+        current_price = active_trade["current_price"]
+        
+        if active_trade["stop_loss"]:
+            if current_price <= active_trade["stop_loss"]:
+                signals["stop_signal"] = True
+        
+        if active_trade["take_profit"]:
+            if current_price >= active_trade["take_profit"]:
+                signals["profit_signal"] = True
+    
+    return signals

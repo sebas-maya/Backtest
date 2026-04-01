@@ -50,6 +50,8 @@ with st.sidebar:
     st.page_link("pages/1_Datos.py", label="🗂️ Datos & Tickers")
     st.page_link("pages/2_Scanner.py", label="🔍 Scanner")
     st.page_link("pages/3_Optimizacion.py", label="⚡ Optimización")
+    st.page_link("pages/4_Seguimiento.py", label="🎯 Seguimiento")
+    st.page_link("pages/5_Constructor.py", label="🏗️ Constructor")
     st.divider()
     cfg = backtest_config_sidebar()
 
