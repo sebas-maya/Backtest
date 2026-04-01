@@ -459,6 +459,7 @@ st.divider()
 # SECCIÓN 2 — Resultados del Grid Search
 # ══════════════════════════════════════════════════════════════════════════════
 opt_ticker_saved = st.session_state.get("opt_ticker", "")
+opt_strat_type_saved = st.session_state.get("opt_strategy_type", "strategy")
 st.markdown(f"### 2 · Resultados del Grid Search — {opt_ticker_saved}")
 
 if report.best_params:
@@ -527,7 +528,7 @@ if not report.grid_results.empty:
     st.download_button(
         "⬇️ Descargar grid completo CSV",
         data=csv_grid,
-        file_name=f"{opt_ticker_saved}_{strat_type}_grid.csv",
+        file_name=f"{opt_ticker_saved}_{opt_strat_type_saved}_grid.csv",
         mime="text/csv",
     )
 
@@ -628,7 +629,7 @@ with t_trades:
 
         csv_t = result.trades_df.to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Descargar trades CSV", data=csv_t,
-                           file_name=f"{opt_ticker_saved}_{strat_type}_best_trades.csv",
+                           file_name=f"{opt_ticker_saved}_{opt_strat_type_saved}_best_trades.csv",
                            mime="text/csv")
 
 with t_candles:
