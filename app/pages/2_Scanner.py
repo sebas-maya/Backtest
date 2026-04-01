@@ -353,44 +353,104 @@ if load_detail or st.session_state.get("selected_strategy_result") is not None:
         )
 
     with tab_trades:
-        trade_kind = st.radio("Tipo de gráfico",
-                              ["waterfall", "scatter", "bar"],
+        trade_kind = st.radio("Tipo de visualización",
+                              ["waterfall", "scatter", "bar", "detalle"],
                               horizontal=True, key="trades_kind")
-        st.plotly_chart(
-            plot_trades(result, kind=trade_kind, show=False),
-            use_container_width=True,
-        )
+        
+        if trade_kind in ["waterfall", "scatter", "bar"]:
+            # Mostrar gráfico Plotly
+            st.plotly_chart(
+                plot_trades(result, kind=trade_kind, show=False),
+                use_container_width=True,
+            )
+        
+        elif trade_kind == "detalle":
+            # Vista detallada estilo Constructor
+            st.markdown("#### 📋 Bitácora Detallada de Trades")
+            
+            if result.trades:
+                trades_data = []
+                for t in result.trades:
+                    trades_data.append({
+                        "ID": t.trade_id,
+                        "Entrada": t.entry_date.strftime("%Y-%m-%d"),
+                        "Salida": t.exit_date.strftime("%Y-%m-%d") if t.exit_date else "N/A",
+                        "Precio Entrada": f"${t.entry_price:.2f}",
+                        "Precio Salida": f"${t.exit_price:.2f}" if t.exit_price else "N/A",
+                        "Shares": f"{t.shares:.2f}",
+                        "PnL $": f"${t.net_pnl:.2f}",
+                        "PnL %": f"{t.pnl_pct:.2f}%",
+                        "Días": t.holding_days,
+                        "Razón Salida": t.exit_reason or "N/A",
+                    })
+                
+                trades_df = pd.DataFrame(trades_data)
+                
+                # Aplicar colores de fondo
+                def color_pnl_bg(val):
+                    if isinstance(val, str) and "%" in val:
+                        num = float(val.replace("%", ""))
+                        if num > 0:
+                            return "background-color: rgba(0, 255, 0, 0.2)"
+                        elif num < 0:
+                            return "background-color: rgba(255, 0, 0, 0.2)"
+                    return ""
+                
+                styled = trades_df.style.applymap(color_pnl_bg, subset=["PnL %"])
+                st.dataframe(styled, use_container_width=True, hide_index=True)
+                
+                # Estadísticas de trades
+                st.markdown("#### 📊 Estadísticas de Trades")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                winning_trades = [t for t in result.trades if t.pnl_pct > 0]
+                losing_trades = [t for t in result.trades if t.pnl_pct < 0]
+                
+                with col1:
+                    st.metric("Trades Ganadores", len(winning_trades))
+                with col2:
+                    st.metric("Trades Perdedores", len(losing_trades))
+                with col3:
+                    avg_win = sum(t.pnl_pct for t in winning_trades) / len(winning_trades) if winning_trades else 0
+                    st.metric("Ganancia Promedio", f"{avg_win:.2f}%")
+                with col4:
+                    avg_loss = sum(t.pnl_pct for t in losing_trades) / len(losing_trades) if losing_trades else 0
+                    st.metric("Pérdida Promedio", f"{avg_loss:.2f}%")
+            else:
+                st.info("📭 No se ejecutaron trades en el período simulado")
 
-        if not result.trades_df.empty:
-            st.markdown("#### Log de trades")
-            trades_display = result.trades_df.copy()
-            fmt_trade = {
-                "entry_price": "{:.2f}", "exit_price": "{:.2f}",
-                "pnl_pct": "{:.4f}", "net_pnl": "{:.2f}",
-                "gross_pnl": "{:.2f}", "commission_paid": "{:.2f}",
-                "mae_pct": "{:.4f}", "mfe_pct": "{:.4f}",
-            }
-            # Colorear P&L
-            def color_pnl(val):
-                if isinstance(val, (int, float)) and not np.isnan(val):
-                    return "color: #00cc66" if val > 0 else "color: #ff3333"
-                return ""
-            try:
-                styled_trades = (
-                    trades_display.style
-                    .format(fmt_trade, na_rep="—")
-                    .applymap(color_pnl, subset=["net_pnl", "pnl_pct"])
-                )
-                st.dataframe(styled_trades, use_container_width=True, height=400)
-            except Exception:
-                st.dataframe(trades_display, use_container_width=True, height=400)
+        # Log técnico (solo si NO está en modo detalle)
+        if not result.trades_df.empty and trade_kind != "detalle":
+            with st.expander("🔧 Log Técnico (Raw Data)", expanded=False):
+                st.markdown("#### Log de trades (formato técnico)")
+                trades_display = result.trades_df.copy()
+                fmt_trade = {
+                    "entry_price": "{:.2f}", "exit_price": "{:.2f}",
+                    "pnl_pct": "{:.4f}", "net_pnl": "{:.2f}",
+                    "gross_pnl": "{:.2f}", "commission_paid": "{:.2f}",
+                    "mae_pct": "{:.4f}", "mfe_pct": "{:.4f}",
+                }
+                # Colorear P&L
+                def color_pnl(val):
+                    if isinstance(val, (int, float)) and not np.isnan(val):
+                        return "color: #00cc66" if val > 0 else "color: #ff3333"
+                    return ""
+                try:
+                    styled_trades = (
+                        trades_display.style
+                        .format(fmt_trade, na_rep="—")
+                        .applymap(color_pnl, subset=["net_pnl", "pnl_pct"])
+                    )
+                    st.dataframe(styled_trades, use_container_width=True, height=400)
+                except Exception:
+                    st.dataframe(trades_display, use_container_width=True, height=400)
 
-            # Exit reasons
-            st.markdown("#### Resumen por razón de salida")
-            exit_df = result.get_trades_by_reason()
-            if not exit_df.empty:
-                st.dataframe(exit_df.style.format("{:.4f}", na_rep="—"),
-                             use_container_width=True)
+                # Exit reasons
+                st.markdown("#### Resumen por razón de salida")
+                exit_df = result.get_trades_by_reason()
+                if not exit_df.empty:
+                    st.dataframe(exit_df.style.format("{:.4f}", na_rep="—"),
+                                 use_container_width=True)
 
             # Descarga
             csv_trades = trades_display.to_csv(index=False).encode("utf-8")
