@@ -25,6 +25,8 @@ from datetime import datetime
 
 from app.utils import (
     init_state, page_header, get_long_df,
+    save_custom_strategy_to_disk, load_custom_strategies_from_disk,
+    delete_custom_strategy_from_disk,
 )
 from strategies import (
     create_custom_strategy, add_strategy_to_library,
@@ -64,6 +66,27 @@ page_header(
     "🏗️ Constructor de Estrategias",
     "Crea estrategias personalizadas y agrégalas a la biblioteca"
 )
+
+# ── Estrategias Guardadas ─────────────────────────────────────────────────────
+
+saved_strategies = load_custom_strategies_from_disk()
+if saved_strategies:
+    with st.expander(f"📚 Estrategias Guardadas ({len(saved_strategies)})", expanded=False):
+        st.markdown("Estrategias personalizadas guardadas permanentemente en disco.")
+        
+        for strat_name in saved_strategies:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.text(f"📁 {strat_name}")
+            with col2:
+                if st.button("🗑️", key=f"del_saved_{strat_name}", help=f"Eliminar {strat_name}"):
+                    if delete_custom_strategy_from_disk(strat_name):
+                        st.success(f"✅ {strat_name} eliminada")
+                        st.rerun()
+                    else:
+                        st.error("❌ Error al eliminar")
+        
+        st.divider()
 
 # ── Verificar datos ───────────────────────────────────────────────────────────
 
@@ -489,25 +512,36 @@ if "builder_result" in st.session_state and st.session_state.builder_result:
             st.info("📭 No hay señales disponibles para visualizar")
     
     with tab4:
-        st.markdown("#### 💾 Guardar Estrategia en Biblioteca")
-        st.markdown("Si la estrategia muestra buenos resultados, puedes agregarla a la biblioteca para usarla en Scanner, Optimización y Seguimiento.")
+        st.markdown("#### 💾 Guardar Estrategia")
         
-        col1, col2 = st.columns([3, 1])
+        st.info(f"**Estrategia:** {strategy.name}\n\n**Descripción:** {strategy.description}")
+        
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.info(f"**Estrategia:** {strategy.name}\n\n**Descripción:** {strategy.description}")
-        
-        with col2:
-            st.write("")
-            st.write("")
-            if st.button("💾 Guardar en Biblioteca", type="primary", use_container_width=True):
-                # Verificar si ya existe
+            st.markdown("##### 📝 Sesión Actual (Temporal)")
+            st.caption("La estrategia estará disponible mientras la app esté abierta.")
+            if st.button("💾 Guardar en Sesión", use_container_width=True, key="save_session"):
                 if strategy.name in STRATEGY_LIBRARY:
-                    st.warning(f"⚠️ Ya existe una estrategia con el nombre '{strategy.name}'")
+                    st.warning(f"⚠️ Ya existe '{strategy.name}' en la biblioteca")
                 else:
                     add_strategy_to_library(strategy)
-                    st.success(f"✅ Estrategia '{strategy.name}' guardada exitosamente!")
-                    st.info("Ya puedes usar esta estrategia en las otras páginas de la app")
+                    st.success(f"✅ Guardada en sesión")
+                    st.info("Disponible en Scanner, Optimización y Seguimiento (esta sesión)")
+        
+        with col2:
+            st.markdown("##### 💾 Permanente (Disco)")
+            st.caption("La estrategia se guardará permanentemente y estará disponible siempre.")
+            if st.button("💾 Guardar Permanente", type="primary", use_container_width=True, key="save_disk"):
+                # Guardar en disco
+                if save_custom_strategy_to_disk(strategy):
+                    # También agregar a biblioteca de sesión actual
+                    if strategy.name not in STRATEGY_LIBRARY:
+                        add_strategy_to_library(strategy)
+                    st.success(f"✅ '{strategy.name}' guardada permanentemente!")
+                    st.info("✨ Se cargará automáticamente al reiniciar la app")
+                else:
+                    st.error("❌ Error guardando estrategia")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 

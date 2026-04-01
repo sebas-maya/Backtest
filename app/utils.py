@@ -377,6 +377,91 @@ def save_tracked_strategies_to_disk(tracked: List[Dict]) -> bool:
         return False
 
 
+# ── Custom Strategy Persistence ───────────────────────────────────────────────
+
+def save_custom_strategy_to_disk(strategy) -> bool:
+    """
+    Guarda estrategia personalizada a JSON en disco.
+    
+    Parameters
+    ----------
+    strategy : Strategy object creado con create_custom_strategy()
+    
+    Returns
+    -------
+    True si se guardó exitosamente
+    """
+    from strategies import Strategy
+    
+    filepath = os.path.join(ROOT, "data", "custom_strategies", f"{strategy.name}.json")
+    
+    try:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Serializar estrategia a dict
+        strategy_dict = {
+            "name": strategy.name,
+            "description": strategy.description,
+            "category": strategy.category,
+            "stop_loss": strategy.stop_loss,
+            "take_profit": strategy.take_profit,
+            "max_holding_days": strategy.max_holding_days,
+            "trailing_stop": strategy.trailing_stop,
+            "created_date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "version": "1.0",
+        }
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(strategy_dict, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Estrategia '{strategy.name}' guardada en {filepath}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error guardando estrategia custom: {e}")
+        return False
+
+
+def load_custom_strategies_from_disk() -> List[str]:
+    """
+    Carga nombres de estrategias personalizadas guardadas en disco.
+    
+    Returns
+    -------
+    Lista de nombres de estrategias guardadas
+    """
+    custom_dir = os.path.join(ROOT, "data", "custom_strategies")
+    
+    if not os.path.exists(custom_dir):
+        return []
+    
+    strategies = []
+    try:
+        for filename in os.listdir(custom_dir):
+            if filename.endswith(".json"):
+                strategy_name = filename.replace(".json", "")
+                strategies.append(strategy_name)
+    except Exception as e:
+        logger.warning(f"Error listando estrategias custom: {e}")
+    
+    return sorted(strategies)
+
+
+def delete_custom_strategy_from_disk(strategy_name: str) -> bool:
+    """Elimina una estrategia personalizada del disco."""
+    filepath = os.path.join(ROOT, "data", "custom_strategies", f"{strategy_name}.json")
+    
+    try:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            logger.info(f"Estrategia '{strategy_name}' eliminada")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error eliminando estrategia: {e}")
+        return False
+
+
 # ── Tracking helpers ──────────────────────────────────────────────────────────
 
 def add_tracked_strategy(ticker: str, strategy_name: str) -> bool:

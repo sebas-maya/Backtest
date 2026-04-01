@@ -271,6 +271,110 @@ def load_default_universe(
 # ---------------------------------------------------------------------------
 # Ejecución directa: prueba rápida
 # ---------------------------------------------------------------------------
+def validate_data_quality(df: pd.DataFrame, ticker: str) -> Dict[str, Any]:
+    """
+    Valida calidad de datos y retorna reporte de issues.
+    
+    Checks:
+    - Outliers (precios >3 sigma usando IQR)
+    - Missing dates (gaps en series temporal)
+    - Zero volume days
+    - Price jumps >20% (posibles splits no ajustados)
+    
+    Parameters
+    ----------
+    df : DataFrame con datos OHLCV de un ticker
+    ticker : Símbolo del activo
+    
+    Returns
+    -------
+    {
+        "ticker": "AAPL",
+        "is_valid": True/False,
+        "quality_score": 0.95,  # 0-1
+        "n_issues": 3,
+        "issues": [
+            {"type": "outlier", "date": "2020-03-15", "value": 250.5},
+            {"type": "gap", "days_missing": 3},
+            {"type": "zero_volume", "count": 5},
+            {"type": "price_jump", "date": "2020-04-01", "return_pct": 25.3},
+        ],
+    }
+    """
+    issues = []
+    
+    try:
+        # Check 1: Outliers usando IQR method
+        Q1 = df['close'].quantile(0.25)
+        Q3 = df['close'].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 3 * IQR
+        upper_bound = Q3 + 3 * IQR
+        
+        outliers = df[(df['close'] < lower_bound) | (df['close'] > upper_bound)]
+        if len(outliers) > 0:
+            for idx in outliers.index[:5]:  # Primeros 5
+                issues.append({
+                    "type": "outlier",
+                    "date": str(idx.date()) if hasattr(idx, 'date') else str(idx),
+                    "value": float(df.loc[idx, 'close']),
+                    "expected_range": [float(lower_bound), float(upper_bound)]
+                })
+        
+        # Check 2: Zero volume days
+        zero_vol = df[df['volume'] == 0]
+        if len(zero_vol) > 0:
+            issues.append({
+                "type": "zero_volume",
+                "count": len(zero_vol),
+                "dates": [str(d.date()) if hasattr(d, 'date') else str(d) for d in zero_vol.index[:3]]
+            })
+        
+        # Check 3: Price jumps >20% (posibles splits no ajustados)
+        returns = df['close'].pct_change()
+        big_jumps = df[abs(returns) > 0.20]
+        if len(big_jumps) > 0:
+            for idx in big_jumps.index[:5]:
+                issues.append({
+                    "type": "price_jump",
+                    "date": str(idx.date()) if hasattr(idx, 'date') else str(idx),
+                    "return_pct": float(returns[idx] * 100),
+                })
+        
+        # Check 4: Missing dates (gaps) - solo si hay suficientes datos
+        if len(df) > 10:
+            date_diffs = pd.Series(df.index).diff().dt.days
+            large_gaps = date_diffs[date_diffs > 7]  # Más de 1 semana
+            if len(large_gaps) > 0:
+                issues.append({
+                    "type": "gap",
+                    "count": len(large_gaps),
+                    "max_gap_days": int(date_diffs.max()),
+                })
+        
+        # Quality score (0-1)
+        penalty = len(issues) / max(len(df), 1) * 100  # Penalizar issues
+        quality_score = max(0.0, min(1.0, 1.0 - penalty))
+        
+        return {
+            "ticker": ticker,
+            "is_valid": quality_score > 0.70 and len(issues) < 10,
+            "quality_score": round(quality_score, 3),
+            "n_issues": len(issues),
+            "issues": issues,
+        }
+        
+    except Exception as e:
+        logger.error(f"Error validando {ticker}: {e}")
+        return {
+            "ticker": ticker,
+            "is_valid": False,
+            "quality_score": 0.0,
+            "n_issues": 0,
+            "issues": [{"type": "error", "message": str(e)}],
+        }
+
+
 if __name__ == "__main__":
     tickers = ["AAPL", "MSFT", "^GSPC", "SPY"]
     df = download_data(tickers, period="2y", cache_dir="data/cache")

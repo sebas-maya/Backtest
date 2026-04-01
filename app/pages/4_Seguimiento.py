@@ -49,6 +49,43 @@ with st.sidebar:
     st.page_link("pages/4_Seguimiento.py", label="🎯 Seguimiento", use_container_width=True)
     st.page_link("pages/5_Constructor.py", label="🏗️ Constructor", use_container_width=True)
     st.divider()
+    
+    # Auto-refresh configuration
+    with st.expander("🔄 Auto-Refresh"):
+        enable_refresh = st.checkbox(
+            "Activar actualización automática",
+            value=False,
+            key="enable_auto_refresh",
+            help="Refresca la página automáticamente para detectar nuevas señales"
+        )
+        
+        if enable_refresh:
+            refresh_interval = st.slider(
+                "Intervalo (minutos)",
+                min_value=1,
+                max_value=60,
+                value=5,
+                step=1,
+                key="refresh_interval"
+            )
+            st.info(f"🔄 Refrescando cada {refresh_interval} min")
+            
+            # Mostrar countdown
+            if "last_refresh_time" not in st.session_state:
+                st.session_state.last_refresh_time = datetime.now()
+            
+            time_since_refresh = (datetime.now() - st.session_state.last_refresh_time).seconds
+            time_until_next = (refresh_interval * 60) - time_since_refresh
+            
+            if time_until_next > 0:
+                st.caption(f"⏱️ Próximo refresh en {time_until_next // 60}:{time_until_next % 60:02d}")
+            
+            # Auto-refresh logic
+            import time
+            if time_since_refresh >= refresh_interval * 60:
+                st.session_state.last_refresh_time = datetime.now()
+                time.sleep(0.1)  # Small delay
+                st.rerun()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 
